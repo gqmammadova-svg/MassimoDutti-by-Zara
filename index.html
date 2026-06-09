@@ -508,16 +508,28 @@ function attachListWatchers(){
     msg.on('value',function(snap){
       var v=snap.val()||{};var keys=Object.keys(v);
       if(keys.length){
-        // preview = newest message
         var last=v[keys[keys.length-1]];
         r._last=(last.from===G.myId?'You: ':'')+dec(last.txt,r.code);
         r._time=tStr(last.ts);
-        // unread = peer messages newer than lastOpened, unless this chat is currently open
-        if(cur&&cur.code===r.code){ r._unread=0; }
+        var isOpen=(cur&&cur.code===r.code);
+        if(isOpen){ r._unread=0; }
         else {
           var seen=r.lastOpened||0;var n=0;
           for(var i=0;i<keys.length;i++){var mm=v[keys[i]];if(mm.from!==G.myId && (mm.ts||0)>seen)n++;}
           r._unread=n;
+        }
+        // ---- NOTIFY on genuinely new peer message (works for any contact while app alive) ----
+        var newestPeerTs=0, newestPeerTxt='';
+        for(var j=0;j<keys.length;j++){var mm2=v[keys[j]];if(mm2.from!==G.myId && (mm2.ts||0)>newestPeerTs){newestPeerTs=mm2.ts||0;newestPeerTxt=dec(mm2.txt,r.code);}}
+        if(newestPeerTs>0){
+          if(r._notifiedTs===undefined){ r._notifiedTs=newestPeerTs; } // first load: don't fire for history
+          else if(newestPeerTs>r._notifiedTs){
+            r._notifiedTs=newestPeerTs;
+            // fire unless this exact chat is open AND app focused
+            if(!(isOpen && document.hasFocus())){
+              notify(dispName(r), newestPeerTxt);
+            }
+          }
         }
       } else { r._last='';r._time='';r._unread=0; }
       save();renderList();updateAppBadge();
@@ -611,7 +623,6 @@ function connectRoom(r){
     if(cur&&cur.code===r.code){ r.lastOpened=Date.now(); r._unread=0; save(); updateAppBadge(); }
     if(m.from!==G.myId && !m.readAt){
       roomRef.child(snap.key).update({readAt:firebase.database.ServerValue.TIMESTAMP});
-      notify(peerName, dec(m.txt,r.code));
     }
   });
   roomRef.on('child_changed',function(snap){
@@ -720,7 +731,6 @@ function doNotify(title,body){
   try{ if(window._swReg&&window._swReg.showNotification){window._swReg.showNotification(title,opts);} else {new Notification(title,opts);} }catch(e){}
 }
 function notify(title,body){
-  if(document.hasFocus())return;
   if(G.notif===false)return;
   if(!('Notification' in window)||Notification.permission!=='granted')return;
   doNotify(title||'New message',body||'');
