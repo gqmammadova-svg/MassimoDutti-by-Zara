@@ -309,6 +309,7 @@ html,body{
     <div class="sheet-card">
       <div class="sheet-title" id="sheetTitle">Contact</div>
       <button class="sheet-btn" onclick="sheetEdit()">Edit name</button>
+      <button class="sheet-btn" onclick="sheetClearConvo()">Delete conversation only</button>
       <button class="sheet-btn danger" onclick="sheetDelete()">Delete contact</button>
     </div>
     <button class="sheet-cancel" onclick="closeSheet()">Cancel</button>
@@ -649,18 +650,26 @@ function hideTyping(){document.getElementById('typing').classList.add('off');}
 
 // ===== NOTIFICATIONS =====
 function reqNotif(){
-  if(!('Notification' in window)){toast('Not supported. On iPhone, add the app to your Home Screen first, then try again.');return;}
+  if(!('Notification' in window)){toast('On iPhone: open from the Home Screen icon (not Safari tab), then try again.');return;}
   Notification.requestPermission().then(function(p){
-    document.getElementById('notifState').textContent=(p==='granted')?'Enabled':'Blocked – enable in Settings';
-    if(p==='granted')toast('Notifications enabled');
+    document.getElementById('notifState').textContent=(p==='granted')?'Enabled':(p==='denied'?'Blocked — enable in iOS Settings':'Tap to enable');
+    if(p==='granted'){
+      toast('Notifications enabled');
+      // fire a test notification so the user sees it works
+      setTimeout(function(){ if(window._swReg&&window._swReg.showNotification){window._swReg.showNotification('Massimo Dutti',{body:'Notifications are on \u2713',tag:'cipher'});} else {try{new Notification('Massimo Dutti',{body:'Notifications are on'});}catch(e){}} },400);
+    } else if(p==='denied'){
+      toast('Blocked. Enable in iOS Settings → Notifications → Massimo Dutti');
+    }
   });
 }
 function notify(title,body){
-  // only when page not focused
   if(document.hasFocus())return;
-  if(('Notification' in window)&&Notification.permission==='granted'){
-    try{new Notification(title||'New message',{body:body||'',tag:'cipher'});}catch(e){}
-  }
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  var opts={body:body||'',tag:'cipher',renotify:true};
+  try{
+    if(window._swReg&&window._swReg.showNotification){ window._swReg.showNotification(title||'New message',opts); }
+    else { new Notification(title||'New message',opts); }
+  }catch(e){ try{ if(window._swReg) window._swReg.showNotification(title||'New message',opts);}catch(e2){} }
 }
 
 // ===== PANEL =====
@@ -692,6 +701,12 @@ function sheetEdit(){var r=sheetTarget;document.getElementById('sheetOv').classL
   var v=prompt('Contact name (your private label):',current);
   if(v===null)return;
   r.label=v.trim();save();renderList();toast('Saved');
+}
+function sheetClearConvo(){var r=sheetTarget;document.getElementById('sheetOv').classList.remove('on');if(!r)return;
+  if(!confirm('Delete the conversation with "'+dispName(r)+'"? Messages are removed for both people, but the contact stays.'))return;
+  try{ if(fbReady) db.ref('rooms/'+r.code+'/messages').remove(); }catch(e){}
+  if(cur&&cur.code===r.code){msgCache={};renderMsgs();}
+  r._last='';r._time='';save();renderList();toast('Conversation deleted');
 }
 function sheetDelete(){var r=sheetTarget;document.getElementById('sheetOv').classList.remove('on');if(r)deleteContact(r);}
 function deleteContact(r){
@@ -731,6 +746,16 @@ document.addEventListener('visibilitychange',function(){
     updateFaceUI();
   }
 });
+
+
+// Register a minimal service worker (required for notifications in iOS PWAs)
+if('serviceWorker' in navigator){
+  try{
+    var swCode="self.addEventListener('install',function(e){self.skipWaiting();});self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim());});self.addEventListener('notificationclick',function(e){e.notification.close();e.waitUntil(self.clients.matchAll({type:'window'}).then(function(cl){if(cl.length)return cl[0].focus();}));});";
+    var blob=new Blob([swCode],{type:'text/javascript'});
+    navigator.serviceWorker.register(URL.createObjectURL(blob)).then(function(reg){ window._swReg=reg; }).catch(function(e){});
+  }catch(e){}
+}
 
 // ===== INIT =====
 (function(){
