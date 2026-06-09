@@ -236,6 +236,7 @@ html,body{
     <div class="copy-hint">Tap code to copy</div>
     <button class="btn" onclick="shareVia()">Share…</button>
     <button class="btn ghost" onclick="closeShare()">Open chat</button>
+    <button class="btn ghost" onclick="cancelNewRoom()">Cancel</button>
   </div>
 </div>
 
@@ -411,7 +412,7 @@ function attachListWatchers(){
 function newRoom(){
   var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',code='';
   for(var i=0;i<6;i++)code+=c[Math.floor(Math.random()*c.length)];
-  var r={code:code,peerName:'',label:'',timerSecs:300,rr:true,ls:true,online:true};
+  var r={code:code,peerName:'',label:'',timerSecs:300,rr:true,ls:true,online:true,_fresh:true};
   G.rooms.push(r);save();
   cur=r;
   document.getElementById('shareCode').textContent=code;
@@ -424,7 +425,16 @@ function shareVia(){
   if(navigator.share){navigator.share({text:txt}).catch(function(){});}
   else{if(navigator.clipboard)navigator.clipboard.writeText(txt);toast('Invite copied!');}
 }
-function closeShare(){document.getElementById('shareModal').classList.remove('on');openChat(cur);}
+function cancelNewRoom(){
+  document.getElementById('shareModal').classList.remove('on');
+  if(cur&&cur._fresh){
+    G.rooms=G.rooms.filter(function(x){return x.code!==cur.code;});
+    try{ if(fbReady) db.ref('rooms/'+cur.code).remove(); }catch(e){}
+    save();renderList();
+  }
+  cur=null;
+}
+function closeShare(){document.getElementById('shareModal').classList.remove('on');if(cur){cur._fresh=false;save();}openChat(cur);}
 
 function openJoin(){document.getElementById('joinInp').value='';document.getElementById('joinModal').classList.add('on');}
 function closeJoin(){document.getElementById('joinModal').classList.remove('on');}
@@ -542,7 +552,7 @@ function hideTyping(){document.getElementById('typing').classList.add('off');}
 
 // ===== NOTIFICATIONS =====
 function reqNotif(){
-  if(!('Notification' in window)){toast('Notifications not supported');return;}
+  if(!('Notification' in window)){toast('Not supported. On iPhone, add the app to your Home Screen first, then try again.');return;}
   Notification.requestPermission().then(function(p){
     document.getElementById('notifState').textContent=(p==='granted')?'Enabled':'Blocked – enable in Settings';
     if(p==='granted')toast('Notifications enabled');
@@ -578,9 +588,20 @@ function setT(s){cur.timerSecs=s;save();syncToggles();document.getElementById('t
 
 // ===== DELETE / RESET =====
 function confirmDeleteRoom(r){
-  if(confirm('Delete this conversation with '+(r.peerName||'this contact')+'? This removes it from your list.')){
+  var nm=dispName(r);
+  var choice=prompt('Type "clear" to delete messages but KEEP '+nm+' as a contact.\nType "remove" to delete the contact entirely.','clear');
+  if(choice===null)return;
+  choice=choice.trim().toLowerCase();
+  if(choice==='remove'){
+    // remove contact + wipe room data
+    try{ if(fbReady) db.ref('rooms/'+r.code).remove(); }catch(e){}
     G.rooms=G.rooms.filter(function(x){return x.code!==r.code;});
-    save();attachListWatchers();renderList();toast('Conversation deleted');
+    save();attachListWatchers();renderList();toast('Contact removed');
+  } else if(choice==='clear'){
+    try{ if(fbReady) db.ref('rooms/'+r.code+'/messages').remove(); }catch(e){}
+    r._last='';r._time='';save();renderList();toast('Messages cleared');
+  } else {
+    toast('Cancelled');
   }
 }
 function confirmClearChat(){
@@ -600,6 +621,19 @@ var tTimer;function toast(m){var el=document.getElementById('toast');el.textCont
 // keep page from scrolling/drifting
 document.addEventListener('touchmove',function(e){if(e.target.closest('.msgs')||e.target.closest('.chats')||e.target.closest('.panel'))return;e.preventDefault();},{passive:false});
 document.addEventListener('gesturestart',function(e){e.preventDefault();});
+
+// Re-lock when app is reopened from background
+var lockedOut=false;
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){ if(G.pin){ lockedOut=true; } }
+  else if(lockedOut && G.pin){
+    lockedOut=false;
+    detachRoom();
+    pinBuf='';updateDots();
+    show('S_lock');
+    document.getElementById('lockSub').textContent='Enter PIN to unlock';
+  }
+});
 
 // ===== INIT =====
 (function(){
