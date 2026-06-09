@@ -295,7 +295,7 @@ html,body{
     <button class="dbtn" onclick="confirmClearChat()">🗑 Clear conversation (keep contact)</button>
   </div>
   <div id="globalSettings" style="display:none">
-    <div class="srow" onclick="reqNotif()"><div class="sicon">🔔</div><div class="sinfo"><div class="sname">Notifications</div><div class="sval" id="notifState">Tap to enable</div></div></div>
+    <div class="srow" onclick="toggleNotif()"><div class="sicon">🔔</div><div class="sinfo"><div class="sname">Notifications</div><div class="sval" id="notifState">Tap to enable</div></div><div class="tog" id="notifTog"></div></div>
     <div class="srow" onclick="toggleFaceSetting()"><div class="sicon">🙂</div><div class="sinfo"><div class="sname">Face ID / Touch ID</div><div class="sval" id="faceState">Tap to enable</div></div></div>
     <div class="srow" style="cursor:default"><div class="sicon">👤</div><div class="sinfo"><div class="sname" id="myNameLabel">—</div><div class="sval">Your display name</div></div></div>
     <div style="border-top:1px solid var(--border);margin-top:8px"></div>
@@ -587,7 +587,8 @@ function connectRoom(r){
   });
   roomRef.on('child_added',function(snap){
     var m=snap.val();m.key=snap.key;msgCache[snap.key]=m;renderMsgs();
-    if(m.from!==G.myId){
+    if(m.readAt&&r.timerSecs>0)scheduleDelete(r,snap.key,m.readAt);
+    if(m.from!==G.myId && !m.readAt){
       roomRef.child(snap.key).update({readAt:firebase.database.ServerValue.TIMESTAMP});
       notify(peerName, dec(m.txt,r.code));
     }
@@ -638,8 +639,29 @@ function send(){
   inp.value='';inp.style.height='auto';document.getElementById('sbtn').disabled=true;setTyping(false);
 }
 var delTimers={};
-function scheduleDelete(r,key,readAt){if(delTimers[key])return;var rem=(r.timerSecs===1)?400:Math.max(0,r.timerSecs*1000-(Date.now()-readAt));delTimers[key]=setTimeout(function(){if(roomRef)roomRef.child(key).remove();delete delTimers[key];},rem);}
+function scheduleDelete(r,key,readAt){
+  if(delTimers[key])return;
+  var elapsed=Date.now()-(readAt||Date.now());
+  var rem=(r.timerSecs===1)?300:Math.max(0,r.timerSecs*1000-elapsed);
+  // if already past the window, delete now
+  if(rem<=0){ if(fbReady) db.ref('rooms/'+r.code+'/messages/'+key).remove(); return; }
+  delTimers[key]=setTimeout(function(){
+    // delete directly via path so it works even if roomRef changed
+    if(fbReady) db.ref('rooms/'+r.code+'/messages/'+key).remove();
+    delete delTimers[key];
+  },rem);
+}
 setInterval(function(){if(!cur)return;for(var k in msgCache){var m=msgCache[k];if(!m.readAt||!cur.timerSecs)continue;var rem=Math.max(0,Math.round(cur.timerSecs-(Date.now()-m.readAt)/1000));var el=document.getElementById('tt_'+k);if(el){el.textContent='⏱ '+tDisp(rem);el.className='ttag'+(rem<30?' urg':'');}}},1000);
+// Safety sweep: catch any read message past its window and delete it
+setInterval(function(){
+  if(!cur||!cur.timerSecs||!fbReady)return;
+  for(var k in msgCache){
+    var m=msgCache[k];
+    if(!m.readAt)continue;
+    var rem=cur.timerSecs*1000-(Date.now()-m.readAt);
+    if(rem<=0){ db.ref('rooms/'+cur.code+'/messages/'+k).remove(); }
+  }
+},5000);
 
 var typingTimer=null;
 function setTyping(v){if(typingRef)typingRef.child(G.myId).set(v);}
@@ -649,27 +671,38 @@ function showTyping(){document.getElementById('tName').textContent=peerName+' is
 function hideTyping(){document.getElementById('typing').classList.add('off');}
 
 // ===== NOTIFICATIONS =====
-function reqNotif(){
-  if(!('Notification' in window)){toast('On iPhone: open from the Home Screen icon (not Safari tab), then try again.');return;}
-  Notification.requestPermission().then(function(p){
-    document.getElementById('notifState').textContent=(p==='granted')?'Enabled':(p==='denied'?'Blocked — enable in iOS Settings':'Tap to enable');
-    if(p==='granted'){
-      toast('Notifications enabled');
-      // fire a test notification so the user sees it works
-      setTimeout(function(){ if(window._swReg&&window._swReg.showNotification){window._swReg.showNotification('Massimo Dutti',{body:'Notifications are on \u2713',tag:'cipher'});} else {try{new Notification('Massimo Dutti',{body:'Notifications are on'});}catch(e){}} },400);
-    } else if(p==='denied'){
-      toast('Blocked. Enable in iOS Settings → Notifications → Massimo Dutti');
-    }
+function updateNotifUI(){
+  var tog=document.getElementById('notifTog');var st=document.getElementById('notifState');
+  if(!('Notification' in window)){st.textContent='Not supported on this device';if(tog)tog.className='tog';return;}
+  if(Notification.permission==='denied'){st.textContent='Blocked — enable in iOS Settings';if(tog)tog.className='tog';return;}
+  var on=(Notification.permission==='granted' && G.notif!==false);
+  if(tog)tog.className='tog'+(on?' on':'');
+  st.textContent=on?'On':(Notification.permission==='granted'?'Off':'Tap to enable');
+}
+function toggleNotif(){
+  if(!('Notification' in window)){toast('On iPhone: open from the Home Screen icon, then try again.');return;}
+  // If already granted, just flip our own on/off flag
+  if(Notification.permission==='granted'){
+    G.notif=(G.notif===false)?true:false;save();updateNotifUI();
+    toast(G.notif?'Notifications on':'Notifications off');
+    if(G.notif){setTimeout(function(){doNotify('Massimo Dutti','Notifications are on \u2713');},300);}
+    return;
+  }
+  if(Notification.permission==='denied'){toast('Blocked. Enable in iOS Settings → Notifications → Massimo Dutti');return;}
+  Notification.requestPermission().then(function(pm){
+    if(pm==='granted'){G.notif=true;save();updateNotifUI();toast('Notifications on');setTimeout(function(){doNotify('Massimo Dutti','Notifications are on \u2713');},400);}
+    else{updateNotifUI();toast('Not enabled');}
   });
+}
+function doNotify(title,body){
+  var opts={body:body||'',tag:'cipher',renotify:true};
+  try{ if(window._swReg&&window._swReg.showNotification){window._swReg.showNotification(title,opts);} else {new Notification(title,opts);} }catch(e){}
 }
 function notify(title,body){
   if(document.hasFocus())return;
+  if(G.notif===false)return;
   if(!('Notification' in window)||Notification.permission!=='granted')return;
-  var opts={body:body||'',tag:'cipher',renotify:true};
-  try{
-    if(window._swReg&&window._swReg.showNotification){ window._swReg.showNotification(title||'New message',opts); }
-    else { new Notification(title||'New message',opts); }
-  }catch(e){ try{ if(window._swReg) window._swReg.showNotification(title||'New message',opts);}catch(e2){} }
+  doNotify(title||'New message',body||'');
 }
 
 // ===== PANEL =====
@@ -684,7 +717,7 @@ function editLabel(){
   toast('Saved');
 }
 function openPanel(){document.getElementById('labelVal').textContent=(cur&&cur.label)?cur.label:'Tap to set a name';document.getElementById('panelTitle').textContent='Conversation settings';document.getElementById('chatSettings').style.display='block';document.getElementById('globalSettings').style.display='none';document.getElementById('ov').classList.add('on');document.getElementById('panel').classList.add('on');}
-function openPanelGlobal(){updateFaceUI();document.getElementById('panelTitle').textContent='Settings';document.getElementById('chatSettings').style.display='none';document.getElementById('globalSettings').style.display='block';if('Notification' in window){document.getElementById('notifState').textContent=Notification.permission==='granted'?'Enabled':(Notification.permission==='denied'?'Blocked – enable in Settings':'Tap to enable');}document.getElementById('ov').classList.add('on');document.getElementById('panel').classList.add('on');}
+function openPanelGlobal(){updateFaceUI();updateNotifUI();document.getElementById('panelTitle').textContent='Settings';document.getElementById('chatSettings').style.display='none';document.getElementById('globalSettings').style.display='block';document.getElementById('ov').classList.add('on');document.getElementById('panel').classList.add('on');}
 function closePanel(){document.getElementById('ov').classList.remove('on');document.getElementById('panel').classList.remove('on');}
 function syncToggles(){if(!cur)return;document.getElementById('togRR').className='tog'+(cur.rr?' on':'');document.getElementById('togLS').className='tog'+(cur.ls?' on':'');document.getElementById('togON').className='tog'+(cur.online?' on':'');var b=document.querySelectorAll('.topt');for(var i=0;i<b.length;i++)b[i].className='topt'+(parseInt(b[i].getAttribute('data-v'))===cur.timerSecs?' on':'');}
 function togRR(){cur.rr=!cur.rr;save();syncToggles();renderMsgs();}
