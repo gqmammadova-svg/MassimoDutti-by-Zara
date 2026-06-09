@@ -75,6 +75,26 @@ html,body{
 .ci-time{font-size:11px;color:var(--text2)}
 .ci-badge{background:var(--accent);color:#fff;font-size:11px;font-weight:600;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 6px}
 .ci-del{background:none;border:none;color:var(--red);font-size:20px;padding:6px 10px;cursor:pointer}
+.chat-row{position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
+.chat-actions{position:absolute;top:0;right:0;height:100%;display:flex;align-items:stretch}
+.chat-actions button{border:none;color:#fff;font-size:13px;font-weight:600;font-family:inherit;padding:0 18px;cursor:pointer}
+.ca-edit{background:#5b6b8f}
+.ca-del{background:var(--red)}
+.chat-item{transition:transform .2s ease,background .15s;background:var(--bg)}
+.chat-item.swiped{transform:translateX(-160px)}
+.ci-menu{background:none;border:none;color:var(--text2);font-size:22px;padding:4px 6px;cursor:pointer;line-height:1}
+/* action sheet */
+.sheet-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:150;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.sheet-ov.on{opacity:1;pointer-events:all}
+.sheet{width:100%;max-width:480px;padding:0 12px calc(12px + env(safe-area-inset-bottom,0px));transform:translateY(20px);transition:transform .2s}
+.sheet-ov.on .sheet{transform:translateY(0)}
+.sheet-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:10px}
+.sheet-title{padding:14px 18px;font-size:13px;color:var(--text2);text-align:center;border-bottom:1px solid var(--border)}
+.sheet-btn{width:100%;padding:16px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text);font-size:16px;font-family:inherit;cursor:pointer}
+.sheet-btn:last-child{border-bottom:none}
+.sheet-btn.danger{color:var(--red)}
+.sheet-cancel{width:100%;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;color:var(--accent2);font-size:16px;font-weight:600;font-family:inherit;cursor:pointer}
+
 .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center;color:var(--text2)}
 .empty .big{font-size:48px;margin-bottom:16px;opacity:.5}
 .empty .t1{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px}
@@ -263,21 +283,35 @@ html,body{
     <div class="srow" onclick="togON()"><div class="sicon">●</div><div class="sinfo"><div class="sname">Online status</div><div class="sval">Show when you're active</div></div><div class="tog on" id="togON"></div></div>
     <div class="srow" style="cursor:default"><div class="sicon">⏱</div><div class="sinfo"><div class="sname">Delete after read</div><div class="sval">Timer starts when other person reads</div></div></div>
     <div class="topts">
-      <button class="topt" data-v="10" onclick="setT(10)">10s</button>
+      <button class="topt" data-v="1" onclick="setT(1)">Now</button>
+      <button class="topt on" data-v="10" onclick="setT(10)">10s</button>
       <button class="topt" data-v="30" onclick="setT(30)">30s</button>
       <button class="topt" data-v="60" onclick="setT(60)">1m</button>
-      <button class="topt on" data-v="300" onclick="setT(300)">5m</button>
+      <button class="topt" data-v="300" onclick="setT(300)">5m</button>
       <button class="topt" data-v="3600" onclick="setT(3600)">1h</button>
       <button class="topt" data-v="0" onclick="setT(0)">Off</button>
     </div>
     <div style="border-top:1px solid var(--border);margin-top:8px"></div>
-    <button class="dbtn" onclick="confirmClearChat()">🗑 Clear this conversation</button>
+    <button class="dbtn" onclick="confirmClearChat()">🗑 Clear conversation (keep contact)</button>
   </div>
   <div id="globalSettings" style="display:none">
     <div class="srow" onclick="reqNotif()"><div class="sicon">🔔</div><div class="sinfo"><div class="sname">Notifications</div><div class="sval" id="notifState">Tap to enable</div></div></div>
+    <div class="srow" onclick="toggleFaceSetting()"><div class="sicon">🙂</div><div class="sinfo"><div class="sname">Face ID / Touch ID</div><div class="sval" id="faceState">Tap to enable</div></div></div>
     <div class="srow" style="cursor:default"><div class="sicon">👤</div><div class="sinfo"><div class="sname" id="myNameLabel">—</div><div class="sval">Your display name</div></div></div>
     <div style="border-top:1px solid var(--border);margin-top:8px"></div>
     <button class="dbtn" onclick="confirmResetApp()">🚪 Reset app (clear PIN & chats)</button>
+  </div>
+</div>
+
+<!-- CONTACT ACTION SHEET -->
+<div class="sheet-ov" id="sheetOv" onclick="closeSheet(event)">
+  <div class="sheet">
+    <div class="sheet-card">
+      <div class="sheet-title" id="sheetTitle">Contact</div>
+      <button class="sheet-btn" onclick="sheetEdit()">Edit name</button>
+      <button class="sheet-btn danger" onclick="sheetDelete()">Delete contact</button>
+    </div>
+    <button class="sheet-cancel" onclick="closeSheet()">Cancel</button>
   </div>
 </div>
 
@@ -321,22 +355,60 @@ function pk(d){if(pinBuf.length>=4)return;pinBuf+=d;updateDots();if(pinBuf.lengt
 function pb(){pinBuf=pinBuf.slice(0,-1);updateDots();}
 function updateDots(){for(var i=0;i<4;i++)document.getElementById('d'+i).className='dot'+(i<pinBuf.length?' on':'');}
 function checkPin(){if(pinBuf===G.pin){pinBuf='';updateDots();openList();}else{for(var i=0;i<4;i++)document.getElementById('d'+i).className='dot err';toast('Wrong PIN');setTimeout(function(){pinBuf='';updateDots();},700);}}
+function b64ToBuf(b64){var bin=atob(b64.replace(/-/g,'+').replace(/_/g,'/'));var b=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b.buffer;}
+function bufToB64(buf){var b=new Uint8Array(buf),s='';for(var i=0;i<b.length;i++)s+=String.fromCharCode(b[i]);return btoa(s);}
+
+async function enableFaceId(){
+  if(!window.PublicKeyCredential){toast('Face ID not supported on this device/browser');return;}
+  try{
+    var avail=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if(!avail){toast('No Face ID / Touch ID available. Add the app to Home Screen first.');return;}
+    var uid=new Uint8Array(16);crypto.getRandomValues(uid);
+    var challenge=new Uint8Array(32);crypto.getRandomValues(challenge);
+    var cred=await navigator.credentials.create({publicKey:{
+      challenge:challenge,
+      rp:{name:'Massimo Dutti',id:location.hostname},
+      user:{id:uid,name:G.name||'user',displayName:G.name||'user'},
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'preferred'},
+      timeout:60000,
+      attestation:'none'
+    }});
+    G.faceCredId=bufToB64(cred.rawId);
+    save();
+    toast('Face ID enabled');
+    updateFaceUI();
+  }catch(e){console.error(e);toast('Could not enable Face ID');}
+}
+
 async function faceId(){
-  if(window.PublicKeyCredential){
-    try{
-      var ok=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      if(ok){
-        // Lightweight biometric gate using WebAuthn get with no credentials falls back; for simplicity unlock on success prompt
-        toast('Authenticating…');
-        // Use a simple credential get attempt
-        try{
-          await navigator.credentials.get({publicKey:{challenge:new Uint8Array(16),timeout:15000,userVerification:'required',rpId:location.hostname,allowCredentials:[]}});
-        }catch(e){}
-        openList();return;
-      }
-    }catch(e){}
-  }
-  toast('Use your PIN');
+  if(!G.faceCredId){toast('Enable Face ID first in Settings');return;}
+  if(!window.PublicKeyCredential){toast('Use your PIN');return;}
+  try{
+    var challenge=new Uint8Array(32);crypto.getRandomValues(challenge);
+    await navigator.credentials.get({publicKey:{
+      challenge:challenge,
+      rpId:location.hostname,
+      allowCredentials:[{type:'public-key',id:b64ToBuf(G.faceCredId)}],
+      userVerification:'required',
+      timeout:60000
+    }});
+    // success
+    pinBuf='';updateDots();openList();
+  }catch(e){console.error(e);toast('Face ID failed — use your PIN');}
+}
+
+function updateFaceUI(){
+  // lock screen button
+  var btn=document.getElementById('faceBtn');
+  if(btn) btn.style.display=(G.faceCredId&&window.PublicKeyCredential)?'flex':'none';
+  // settings row label
+  var fs=document.getElementById('faceState');
+  if(fs) fs.textContent=G.faceCredId?'Enabled — tap to disable':'Tap to enable';
+}
+function toggleFaceSetting(){
+  if(G.faceCredId){ G.faceCredId=''; save(); updateFaceUI(); toast('Face ID disabled'); }
+  else { enableFaceId(); }
 }
 
 // ===== IDENTITY =====
@@ -360,26 +432,51 @@ function openList(){
 function renderList(){
   var c=document.getElementById('chats');
   if(!G.rooms.length){
-    c.innerHTML='<div class="empty"><div class="big">💬</div><div class="t1">No contacts yet</div><div class="t2">Tap "New chat" to create one and share the code, or "Join with code" if someone sent you one.</div></div>';
+    c.innerHTML='<div class="empty"><div class="big">\ud83d\udcac</div><div class="t1">No contacts yet</div><div class="t2">Tap "New chat" to create one and share the code, or "Join with code" if someone sent you one.</div></div>';
     return;
   }
   c.innerHTML='';
   G.rooms.forEach(function(r){
-    var item=document.createElement('div');item.className='chat-item';
     var nm=dispName(r);
     var online=r._online;
+    var row=document.createElement('div');row.className='chat-row';
+    // hidden actions behind the row
+    var actions=document.createElement('div');actions.className='chat-actions';
+    var eb=document.createElement('button');eb.className='ca-edit';eb.textContent='Edit';
+    eb.onclick=function(ev){ev.stopPropagation();openSheet(r);closeAllSwipes();};
+    var dbn=document.createElement('button');dbn.className='ca-del';dbn.textContent='Delete';
+    dbn.onclick=function(ev){ev.stopPropagation();deleteContact(r);};
+    actions.appendChild(eb);actions.appendChild(dbn);
+    row.appendChild(actions);
+
+    var item=document.createElement('div');item.className='chat-item';
     item.innerHTML=
-      '<div class="ci-av">'+(nm[0]?nm[0].toUpperCase():'?')+'<div class="ci-dot'+(online?' on':'')+'"></div></div>'+
-      '<div class="ci-info"><div class="ci-name">'+escapeHtml(nm)+'</div><div class="ci-last">'+(r._last||('Code: '+r.code))+'</div></div>'+
-      '<div class="ci-meta">'+(r._time?'<div class="ci-time">'+r._time+'</div>':'')+(r._unread?'<div class="ci-badge">'+r._unread+'</div>':'')+'</div>';
-    item.onclick=function(){openChat(r);};
-    // long-press / swipe to delete -> add a delete button via long press
-    var press;
-    item.addEventListener('touchstart',function(){press=setTimeout(function(){confirmDeleteRoom(r);},600);});
-    item.addEventListener('touchend',function(){clearTimeout(press);});
-    item.addEventListener('touchmove',function(){clearTimeout(press);});
-    c.appendChild(item);
+      '<div class="ci-av">'+(nm[0]?escapeHtml(nm[0].toUpperCase()):'?')+'<div class="ci-dot'+(online?' on':'')+'"></div></div>'+
+      '<div class="ci-info"><div class="ci-name">'+escapeHtml(nm)+'</div><div class="ci-last">'+escapeHtml(r._last||('Code: '+r.code))+'</div></div>'+
+      '<div class="ci-meta">'+(r._time?'<div class="ci-time">'+r._time+'</div>':'')+(r._unread?'<div class="ci-badge">'+r._unread+'</div>':'')+'</div>'+
+      '<button class="ci-menu" aria-label="menu">\u22ee</button>';
+    // tap row opens chat (unless swiped)
+    item.addEventListener('click',function(ev){
+      if(item.classList.contains('swiped')){item.classList.remove('swiped');return;}
+      if(ev.target.closest('.ci-menu')){ev.stopPropagation();openSheet(r);return;}
+      openChat(r);
+    });
+    // swipe handling
+    var startX=0,curX=0,swiping=false;
+    item.addEventListener('touchstart',function(e){startX=e.touches[0].clientX;swiping=true;},{passive:true});
+    item.addEventListener('touchmove',function(e){
+      if(!swiping)return;curX=e.touches[0].clientX;var dx=curX-startX;
+      if(dx<-10){closeAllSwipes(item);item.classList.add('swiped');}
+      else if(dx>10){item.classList.remove('swiped');}
+    },{passive:true});
+    item.addEventListener('touchend',function(){swiping=false;});
+    row.appendChild(item);
+    c.appendChild(row);
   });
+}
+function closeAllSwipes(except){
+  var items=document.querySelectorAll('.chat-item.swiped');
+  items.forEach(function(it){if(it!==except)it.classList.remove('swiped');});
 }
 function dispName(r){return (r.label&&r.label.trim())?r.label:(r.peerName||'New chat');}
 function escapeHtml(s){return (s+'').replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
@@ -412,7 +509,7 @@ function attachListWatchers(){
 function newRoom(){
   var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',code='';
   for(var i=0;i<6;i++)code+=c[Math.floor(Math.random()*c.length)];
-  var r={code:code,peerName:'',label:'',timerSecs:300,rr:true,ls:true,online:true,_fresh:true};
+  var r={code:code,peerName:'',label:'',timerSecs:10,rr:true,ls:true,online:true,_fresh:true};
   G.rooms.push(r);save();
   cur=r;
   document.getElementById('shareCode').textContent=code;
@@ -444,7 +541,7 @@ function doJoin(){
   // avoid duplicates
   var existing=G.rooms.filter(function(r){return r.code===code;})[0];
   if(existing){closeJoin();openChat(existing);return;}
-  var r={code:code,peerName:'',label:'',timerSecs:300,rr:true,ls:true,online:true};
+  var r={code:code,peerName:'',label:'',timerSecs:10,rr:true,ls:true,online:true};
   G.rooms.push(r);save();closeJoin();openChat(r);
 }
 
@@ -514,7 +611,7 @@ function updatePeer(peer){
 }
 
 function tStr(ts){if(!ts)return '';var d=new Date(ts);var h=d.getHours(),m=d.getMinutes();return (h<10?'0'+h:h)+':'+(m<10?'0'+m:m);}
-function tDisp(s){if(s<=0)return '0s';if(s<60)return s+'s';if(s<3600)return Math.ceil(s/60)+'m';return Math.ceil(s/3600)+'h';}
+function tDisp(s){if(s<=0)return '0s';if(s===1)return 'Now';if(s<60)return s+'s';if(s<3600)return Math.ceil(s/60)+'m';return Math.ceil(s/3600)+'h';}
 
 function renderMsgs(){
   var area=document.getElementById('msgs');
@@ -540,7 +637,7 @@ function send(){
   inp.value='';inp.style.height='auto';document.getElementById('sbtn').disabled=true;setTyping(false);
 }
 var delTimers={};
-function scheduleDelete(r,key,readAt){if(delTimers[key])return;var rem=Math.max(0,r.timerSecs*1000-(Date.now()-readAt));delTimers[key]=setTimeout(function(){if(roomRef)roomRef.child(key).remove();delete delTimers[key];},rem);}
+function scheduleDelete(r,key,readAt){if(delTimers[key])return;var rem=(r.timerSecs===1)?400:Math.max(0,r.timerSecs*1000-(Date.now()-readAt));delTimers[key]=setTimeout(function(){if(roomRef)roomRef.child(key).remove();delete delTimers[key];},rem);}
 setInterval(function(){if(!cur)return;for(var k in msgCache){var m=msgCache[k];if(!m.readAt||!cur.timerSecs)continue;var rem=Math.max(0,Math.round(cur.timerSecs-(Date.now()-m.readAt)/1000));var el=document.getElementById('tt_'+k);if(el){el.textContent='⏱ '+tDisp(rem);el.className='ttag'+(rem<30?' urg':'');}}},1000);
 
 var typingTimer=null;
@@ -578,7 +675,7 @@ function editLabel(){
   toast('Saved');
 }
 function openPanel(){document.getElementById('labelVal').textContent=(cur&&cur.label)?cur.label:'Tap to set a name';document.getElementById('panelTitle').textContent='Conversation settings';document.getElementById('chatSettings').style.display='block';document.getElementById('globalSettings').style.display='none';document.getElementById('ov').classList.add('on');document.getElementById('panel').classList.add('on');}
-function openPanelGlobal(){document.getElementById('panelTitle').textContent='Settings';document.getElementById('chatSettings').style.display='none';document.getElementById('globalSettings').style.display='block';if('Notification' in window){document.getElementById('notifState').textContent=Notification.permission==='granted'?'Enabled':(Notification.permission==='denied'?'Blocked – enable in Settings':'Tap to enable');}document.getElementById('ov').classList.add('on');document.getElementById('panel').classList.add('on');}
+function openPanelGlobal(){updateFaceUI();document.getElementById('panelTitle').textContent='Settings';document.getElementById('chatSettings').style.display='none';document.getElementById('globalSettings').style.display='block';if('Notification' in window){document.getElementById('notifState').textContent=Notification.permission==='granted'?'Enabled':(Notification.permission==='denied'?'Blocked – enable in Settings':'Tap to enable');}document.getElementById('ov').classList.add('on');document.getElementById('panel').classList.add('on');}
 function closePanel(){document.getElementById('ov').classList.remove('on');document.getElementById('panel').classList.remove('on');}
 function syncToggles(){if(!cur)return;document.getElementById('togRR').className='tog'+(cur.rr?' on':'');document.getElementById('togLS').className='tog'+(cur.ls?' on':'');document.getElementById('togON').className='tog'+(cur.online?' on':'');var b=document.querySelectorAll('.topt');for(var i=0;i<b.length;i++)b[i].className='topt'+(parseInt(b[i].getAttribute('data-v'))===cur.timerSecs?' on':'');}
 function togRR(){cur.rr=!cur.rr;save();syncToggles();renderMsgs();}
@@ -587,22 +684,21 @@ function togON(){cur.online=!cur.online;save();syncToggles();if(myStatusRef)mySt
 function setT(s){cur.timerSecs=s;save();syncToggles();document.getElementById('tBar').style.display=s?'flex':'none';document.getElementById('tLabel').textContent=tDisp(s);toast(s?'Deletes '+tDisp(s)+' after read':'Auto-delete off');}
 
 // ===== DELETE / RESET =====
-function confirmDeleteRoom(r){
-  var nm=dispName(r);
-  var choice=prompt('Type "clear" to delete messages but KEEP '+nm+' as a contact.\nType "remove" to delete the contact entirely.','clear');
-  if(choice===null)return;
-  choice=choice.trim().toLowerCase();
-  if(choice==='remove'){
-    // remove contact + wipe room data
-    try{ if(fbReady) db.ref('rooms/'+r.code).remove(); }catch(e){}
-    G.rooms=G.rooms.filter(function(x){return x.code!==r.code;});
-    save();attachListWatchers();renderList();toast('Contact removed');
-  } else if(choice==='clear'){
-    try{ if(fbReady) db.ref('rooms/'+r.code+'/messages').remove(); }catch(e){}
-    r._last='';r._time='';save();renderList();toast('Messages cleared');
-  } else {
-    toast('Cancelled');
-  }
+var sheetTarget=null;
+function openSheet(r){sheetTarget=r;document.getElementById('sheetTitle').textContent=dispName(r);document.getElementById('sheetOv').classList.add('on');}
+function closeSheet(ev){if(ev&&ev.target&&!ev.target.classList.contains('sheet-ov'))return;document.getElementById('sheetOv').classList.remove('on');}
+function sheetEdit(){var r=sheetTarget;document.getElementById('sheetOv').classList.remove('on');if(!r)return;
+  var current=(r.label||r.peerName||'');
+  var v=prompt('Contact name (your private label):',current);
+  if(v===null)return;
+  r.label=v.trim();save();renderList();toast('Saved');
+}
+function sheetDelete(){var r=sheetTarget;document.getElementById('sheetOv').classList.remove('on');if(r)deleteContact(r);}
+function deleteContact(r){
+  if(!confirm('Delete contact "'+dispName(r)+'"? This removes them and the conversation entirely.'))return;
+  try{ if(fbReady) db.ref('rooms/'+r.code).remove(); }catch(e){}
+  G.rooms=G.rooms.filter(function(x){return x.code!==r.code;});
+  save();attachListWatchers();renderList();toast('Contact deleted');
 }
 function confirmClearChat(){
   if(confirm('Clear all messages in this conversation for both people?')){
@@ -632,6 +728,7 @@ document.addEventListener('visibilitychange',function(){
     pinBuf='';updateDots();
     show('S_lock');
     document.getElementById('lockSub').textContent='Enter PIN to unlock';
+    updateFaceUI();
   }
 });
 
@@ -639,7 +736,7 @@ document.addEventListener('visibilitychange',function(){
 (function(){
   var ok=load();
   if(!ok||!G.pin){show('S_id');}
-  else{show('S_lock');document.getElementById('lockSub').textContent='Enter PIN to unlock';if(window.PublicKeyCredential)document.getElementById('faceBtn').style.display='flex';}
+  else{show('S_lock');document.getElementById('lockSub').textContent='Enter PIN to unlock';updateFaceUI();}
 })();
 </script>
 </body>
