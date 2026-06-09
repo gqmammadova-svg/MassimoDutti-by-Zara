@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#0a0a0f"/>
+<title>Cipher</title>
+<style>
+:root {
+  --bg:#0a0a0f; --surface:#12121a; --surface2:#1a1a26;
+  --border:#2a2a3a; --accent:#7c6bff; --accent2:#a78bfa;
+  --green:#34d399; --red:#f87171; --amber:#fbbf24;
+  --text:#e8e8f0; --text2:#8888aa; --text3:#444466;
+  --me:#2d2060; --them:#1a1a26;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;width:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+
+/* SCREENS */
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);transition:opacity .25s,transform .25s}
+.screen.off{opacity:0;pointer-events:none;transform:scale(.97)}
+
+/* LOCK */
+#S_lock{gap:0;background:var(--bg)}
+.lock-icon{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--accent),#4f3bff);display:flex;align-items:center;justify-content:center;font-size:34px;margin-bottom:24px;box-shadow:0 0 40px rgba(124,107,255,.3)}
+.lock-title{font-size:26px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px}
+.lock-sub{font-size:13px;color:var(--text2);margin-bottom:40px;font-variant-numeric:tabular-nums}
+.dots{display:flex;gap:16px;margin-bottom:36px}
+.dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);transition:all .15s}
+.dot.on{background:var(--accent);border-color:var(--accent);box-shadow:0 0 8px rgba(124,107,255,.6)}
+.dot.err{background:var(--red);border-color:var(--red);animation:shake .3s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.numpad{display:grid;grid-template-columns:repeat(3,72px);gap:12px}
+.nk{width:72px;height:72px;border-radius:50%;border:none;background:var(--surface2);color:var(--text);font-size:22px;font-weight:500;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-direction:column;-webkit-user-select:none;user-select:none;transition:background .1s,transform .1s}
+.nk:active{background:var(--accent);transform:scale(.9)}
+.nk .s{font-size:8px;color:var(--text2);letter-spacing:1.5px;margin-top:2px}
+.nk.sp{background:transparent;font-size:18px;color:var(--text2)}
+.nk.sp:active{background:var(--surface2);color:var(--text)}
+.lock-hint{font-size:12px;color:var(--text2);margin-top:20px}
+
+/* SETUP */
+#S_setup{gap:0;padding:32px;justify-content:flex-start;padding-top:calc(60px + env(safe-area-inset-top,0px));overflow-y:auto}
+.step{width:100%;max-width:360px;display:flex;flex-direction:column}
+.step.off{display:none}
+.lbl{font-size:11px;color:var(--accent);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;font-weight:600}
+.stitle{font-size:24px;font-weight:700;letter-spacing:-.4px;margin-bottom:6px}
+.sdesc{font-size:13px;color:var(--text2);margin-bottom:28px;line-height:1.6}
+.inp{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-bottom:12px;transition:border-color .2s}
+.inp:focus{border-color:var(--accent)}
+.inp::placeholder{color:var(--text3)}
+.btn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;margin-top:4px;transition:opacity .15s,transform .1s}
+.btn:active{opacity:.85;transform:scale(.98)}
+.btn.ghost{background:none;border:1.5px solid var(--border);color:var(--text2);margin-top:8px}
+.btn.ghost:active{border-color:var(--accent);color:var(--text)}
+.code-box{background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:16px;font-size:22px;letter-spacing:5px;text-align:center;color:var(--accent2);margin-bottom:8px;cursor:pointer;font-variant-numeric:tabular-nums}
+.copy-hint{font-size:12px;color:var(--text2);text-align:center;margin-bottom:20px}
+
+/* CHAT */
+#S_chat{justify-content:flex-start;padding:0}
+.hdr{width:100%;background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:12px;flex-shrink:0}
+.av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#4f3bff);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;position:relative}
+.av-dot{position:absolute;bottom:0;right:0;width:11px;height:11px;border-radius:50%;border:2px solid var(--surface);background:var(--text3);transition:background .3s}
+.av-dot.on{background:var(--green)}
+.hdr-info{flex:1;min-width:0}
+.hdr-name{font-size:15px;font-weight:600}
+.hdr-status{font-size:12px;color:var(--text2);margin-top:1px}
+.hdr-status.on{color:var(--green)}
+.hdr-btn{width:36px;height:36px;border-radius:10px;border:none;background:none;color:var(--text2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;transition:background .15s}
+.hdr-btn:active{background:var(--surface2)}
+.timer-bar{width:100%;background:rgba(124,107,255,.07);border-bottom:1px solid rgba(124,107,255,.12);padding:7px 14px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--accent2);flex-shrink:0}
+.timer-bar .chg{margin-left:auto;cursor:pointer;color:var(--text2);font-size:11px}
+.enc-bar{text-align:center;font-size:11px;color:var(--text2);padding:7px;display:flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0}
+.enc-dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:4px;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
+.msgs::-webkit-scrollbar{display:none}
+.dv{text-align:center;font-size:11px;color:var(--text2);padding:8px 0}
+.grp{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.grp.me{align-items:flex-end}
+.grp.them{align-items:flex-start}
+.brow{display:flex;align-items:flex-end;gap:6px;max-width:80%}
+.grp.me .brow{flex-direction:row-reverse}
+.bub{padding:10px 14px;border-radius:18px;font-size:15px;line-height:1.45;word-break:break-word;transition:opacity .3s}
+.grp.me .bub{background:var(--me);border-bottom-right-radius:4px}
+.grp.them .bub{background:var(--them);border:1px solid var(--border);border-bottom-left-radius:4px}
+.bub.fade{opacity:.3}
+.meta{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);padding:0 4px;margin-top:1px}
+.grp.me .meta{flex-direction:row-reverse}
+.ticks{font-size:13px}
+.ticks.sent{color:var(--text3)}
+.ticks.delivered{color:var(--text2)}
+.ticks.read{color:var(--accent)}
+.ttag{font-size:10px;color:var(--amber);background:rgba(251,191,36,.1);border-radius:4px;padding:1px 5px}
+.ttag.urg{color:var(--red);background:rgba(248,113,113,.1)}
+.typing{display:flex;align-items:center;gap:8px;padding:0 14px 8px;font-size:12px;color:var(--text2);flex-shrink:0}
+.typing.off{display:none}
+.tdots{display:flex;gap:3px}
+.tdots span{width:5px;height:5px;border-radius:50%;background:var(--text2);animation:tb 1.2s infinite}
+.tdots span:nth-child(2){animation-delay:.2s}
+.tdots span:nth-child(3){animation-delay:.4s}
+@keyframes tb{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+.ibar{width:100%;background:var(--surface);border-top:1px solid var(--border);padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;align-items:flex-end;gap:8px;flex-shrink:0}
+.minp{flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:22px;padding:10px 16px;color:var(--text);font-size:15px;font-family:inherit;outline:none;resize:none;max-height:120px;min-height:42px;transition:border-color .2s;line-height:1.4;-webkit-appearance:none}
+.minp:focus{border-color:var(--accent)}
+.minp::placeholder{color:var(--text3)}
+.sbtn{width:44px;height:44px;border-radius:50%;background:var(--accent);border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .1s,opacity .15s;box-shadow:0 2px 12px rgba(124,107,255,.4);font-size:18px}
+.sbtn:active{transform:scale(.88)}
+.sbtn:disabled{opacity:.35}
+
+/* PANEL */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:100;opacity:0;pointer-events:none;transition:opacity .25s}
+.ov.on{opacity:1;pointer-events:all}
+.panel{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-radius:24px 24px 0 0;border-top:1px solid var(--border);padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);z-index:101;max-height:85vh;overflow-y:auto}
+.panel.on{transform:translateY(0)}
+.ph{width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 20px}
+.ptitle{font-size:16px;font-weight:600;padding:0 20px 16px;border-bottom:1px solid var(--border)}
+.srow{display:flex;align-items:center;padding:14px 20px;gap:14px;cursor:pointer;transition:background .15s}
+.srow:active{background:var(--surface2)}
+.sicon{font-size:20px;width:24px;text-align:center}
+.sinfo{flex:1}
+.sname{font-size:14px;font-weight:500}
+.sval{font-size:12px;color:var(--text2);margin-top:2px}
+.tog{width:44px;height:26px;background:var(--border);border-radius:13px;position:relative;transition:background .2s;flex-shrink:0}
+.tog.on{background:var(--accent)}
+.tog::after{content:'';position:absolute;width:20px;height:20px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.tog.on::after{transform:translateX(18px)}
+.topts{display:flex;gap:8px;padding:10px 20px;flex-wrap:wrap}
+.topt{padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);font-size:13px;color:var(--text2);cursor:pointer;transition:all .15s;background:none;font-family:inherit}
+.topt.on{border-color:var(--accent);color:var(--accent);background:rgba(124,107,255,.1)}
+.dbtn{margin:8px 20px;background:rgba(248,113,113,.08);border:1.5px solid rgba(248,113,113,.2);color:var(--red);border-radius:12px;padding:13px;font-size:14px;font-family:inherit;cursor:pointer;width:calc(100% - 40px);transition:background .15s}
+.dbtn:active{background:rgba(248,113,113,.15)}
+
+/* CONFIRM */
+.cfm{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:300;padding:24px;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .2s}
+.cfm.on{opacity:1;pointer-events:all}
+.ccard{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;width:100%;max-width:300px;text-align:center}
+.cicon{font-size:36px;margin-bottom:12px}
+.ctitle{font-size:17px;font-weight:600;margin-bottom:8px}
+.cdesc{font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:20px}
+.cacts{display:flex;gap:10px}
+.cacts button{flex:1;padding:12px;border-radius:10px;font-size:14px;font-family:inherit;font-weight:500;cursor:pointer;border:none}
+.ccancel{background:var(--surface2);color:var(--text)}
+.cok{background:var(--red);color:#fff}
+
+/* TOAST */
+.toast{position:fixed;top:calc(60px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%) translateY(-10px);background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;z-index:500;opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- LOCK -->
+<div class="screen" id="S_lock">
+  <div class="lock-icon">🔐</div>
+  <div class="lock-title">Cipher</div>
+  <div class="lock-sub" id="lockSub">end-to-end encrypted</div>
+  <div class="dots">
+    <div class="dot" id="d0"></div><div class="dot" id="d1"></div>
+    <div class="dot" id="d2"></div><div class="dot" id="d3"></div>
+  </div>
+  <div class="numpad">
+    <button class="nk" onclick="pk('1')">1</button>
+    <button class="nk" onclick="pk('2')">2<span class="s">ABC</span></button>
+    <button class="nk" onclick="pk('3')">3<span class="s">DEF</span></button>
+    <button class="nk" onclick="pk('4')">4<span class="s">GHI</span></button>
+    <button class="nk" onclick="pk('5')">5<span class="s">JKL</span></button>
+    <button class="nk" onclick="pk('6')">6<span class="s">MNO</span></button>
+    <button class="nk" onclick="pk('7')">7<span class="s">PQRS</span></button>
+    <button class="nk" onclick="pk('8')">8<span class="s">TUV</span></button>
+    <button class="nk" onclick="pk('9')">9<span class="s">WXYZ</span></button>
+    <button class="nk sp" onclick="faceId()">⬡</button>
+    <button class="nk" onclick="pk('0')">0</button>
+    <button class="nk sp" onclick="pb()">⌫</button>
+  </div>
+</div>
+
+<!-- SETUP -->
+<div class="screen off" id="S_setup">
+  <!-- Step 1 -->
+  <div class="step" id="st1">
+    <div class="lbl">Step 1 of 3</div>
+    <div class="stitle">Your identity</div>
+    <div class="sdesc">Choose a display name and a 4-digit PIN to protect the chat.</div>
+    <input class="inp" id="iName" placeholder="Your name" maxlength="20"/>
+    <input class="inp" id="iPin" type="password" inputmode="numeric" placeholder="4-digit PIN" maxlength="4"/>
+    <input class="inp" id="iPin2" type="password" inputmode="numeric" placeholder="Confirm PIN" maxlength="4"/>
+    <button class="btn" onclick="s1()">Continue →</button>
+  </div>
+  <!-- Step 2 -->
+  <div class="step off" id="st2">
+    <div class="lbl">Step 2 of 3</div>
+    <div class="stitle">Create or join</div>
+    <div class="sdesc">Create a new private room and share the code, or enter a code you received.</div>
+    <button class="btn" onclick="createRoom()">Create new room</button>
+    <button class="btn ghost" onclick="document.getElementById('joinSec').style.display='flex';document.getElementById('joinSec').style.flexDirection='column'">Join existing room</button>
+    <div id="joinSec" style="display:none;margin-top:14px">
+      <input class="inp" id="iJoin" placeholder="Enter 6-digit code" maxlength="6" style="text-align:center;letter-spacing:4px;font-size:18px;text-transform:uppercase"/>
+      <button class="btn" onclick="joinRoom()">Join Room</button>
+    </div>
+  </div>
+  <!-- Step 3 -->
+  <div class="step off" id="st3">
+    <div class="lbl">Step 3 of 3</div>
+    <div class="stitle">Share this code</div>
+    <div class="sdesc">Send this to the other person so they can join your private room.</div>
+    <div class="code-box" id="codeBox" onclick="copyCode()">——————</div>
+    <div class="copy-hint">Tap to copy</div>
+    <button class="btn" onclick="finishSetup()">Open Chat →</button>
+  </div>
+</div>
+
+<!-- CHAT -->
+<div class="screen off" id="S_chat">
+  <div class="hdr">
+    <div class="av" id="pAv">?<div class="av-dot" id="pDot"></div></div>
+    <div class="hdr-info">
+      <div class="hdr-name" id="pName">Waiting…</div>
+      <div class="hdr-status" id="pStat">Not connected</div>
+    </div>
+    <button class="hdr-btn" onclick="openPanel()">⚙</button>
+  </div>
+  <div class="timer-bar" id="tBar">
+    ⏱ Messages delete <strong id="tLabel" style="margin:0 3px">5m</strong> after read
+    <span class="chg" onclick="openPanel()">Change</span>
+  </div>
+  <div class="enc-bar">
+    <div class="enc-dot"></div>
+    End-to-end encrypted · Room <span id="rBadge" style="margin-left:4px;font-variant-numeric:tabular-nums"></span>
+  </div>
+  <div class="msgs" id="msgs"><div class="dv">TODAY</div></div>
+  <div class="typing off" id="typing">
+    <div class="tdots"><span></span><span></span><span></span></div>
+    <span id="tName">typing…</span>
+  </div>
+  <div class="ibar">
+    <textarea class="minp" id="minp" placeholder="Message…" rows="1"
+      oninput="onInp(this)" onkeydown="onKD(event)"></textarea>
+    <button class="sbtn" id="sbtn" onclick="send()" disabled>➤</button>
+  </div>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div class="ov" id="ov" onclick="closePanel()"></div>
+<div class="panel" id="panel">
+  <div class="ph"></div>
+  <div class="ptitle">Settings</div>
+  <div class="srow" onclick="togRR()">
+    <div class="sicon">✓✓</div>
+    <div class="sinfo"><div class="sname">Read receipts</div><div class="sval">Show when messages are read</div></div>
+    <div class="tog on" id="togRR"></div>
+  </div>
+  <div class="srow" onclick="togLS()">
+    <div class="sicon">🕐</div>
+    <div class="sinfo"><div class="sname">Last seen</div><div class="sval">Show your last seen time</div></div>
+    <div class="tog on" id="togLS"></div>
+  </div>
+  <div class="srow" onclick="togON()">
+    <div class="sicon">●</div>
+    <div class="sinfo"><div class="sname">Online status</div><div class="sval">Show when you're active</div></div>
+    <div class="tog on" id="togON"></div>
+  </div>
+  <div class="srow" style="cursor:default">
+    <div class="sicon">⏱</div>
+    <div class="sinfo"><div class="sname">Delete after read</div><div class="sval">Timer starts when other person reads</div></div>
+  </div>
+  <div class="topts">
+    <button class="topt" data-v="10" onclick="setT(10)">10s</button>
+    <button class="topt" data-v="30" onclick="setT(30)">30s</button>
+    <button class="topt" data-v="60" onclick="setT(60)">1m</button>
+    <button class="topt on" data-v="300" onclick="setT(300)">5m</button>
+    <button class="topt" data-v="3600" onclick="setT(3600)">1h</button>
+    <button class="topt" data-v="0" onclick="setT(0)">Off</button>
+  </div>
+  <div style="border-top:1px solid var(--border);margin-top:8px"></div>
+  <button class="dbtn" onclick="confirmClear()">🗑 Clear all messages</button>
+  <button class="dbtn" style="margin-top:4px" onclick="confirmLeave()">🚪 Leave room</button>
+</div>
+
+<!-- CONFIRM -->
+<div class="cfm" id="cfm">
+  <div class="ccard">
+    <div class="cicon" id="cIcon">🗑</div>
+    <div class="ctitle" id="cTitle">Clear messages?</div>
+    <div class="cdesc" id="cDesc">This cannot be undone.</div>
+    <div class="cacts">
+      <button class="ccancel" onclick="closeCfm()">Cancel</button>
+      <button class="cok" id="cOk" onclick="doCfm()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var G = {
+  pin:'', name:'', room:'',
+  timerSecs:300,
+  rr:true, ls:true, online:true,
+  msgs:[],
+  cfmAction:null
+};
+
+var peer = {name:'Sam', online:false, lastSeen:null};
+var pinBuf = '';
+
+// ── PERSIST ──
+function save() {
+  try {
+    localStorage.setItem('cph', JSON.stringify({
+      pin:G.pin, name:G.name, room:G.room,
+      timerSecs:G.timerSecs, rr:G.rr, ls:G.ls, online:G.online,
+      msgs:G.msgs
+    }));
+  } catch(e) {}
+}
+function load() {
+  try {
+    var d = JSON.parse(localStorage.getItem('cph') || 'null');
+    if (d && d.pin) { Object.assign(G, d); return true; }
+  } catch(e) {}
+  return false;
+}
+
+// ── SIMPLE ENCRYPT ──
+function enc(t, k) {
+  try {
+    var o = '';
+    for (var i = 0; i < t.length; i++) {
+      o += String.fromCharCode(t.charCodeAt(i) ^ k.charCodeAt(i % k.length));
+    }
+    return btoa(unescape(encodeURIComponent(o)));
+  } catch(e) { return t; }
+}
+function dec(e, k) {
+  try {
+    var t = decodeURIComponent(escape(atob(e)));
+    var o = '';
+    for (var i = 0; i < t.length; i++) {
+      o += String.fromCharCode(t.charCodeAt(i) ^ k.charCodeAt(i % k.length));
+    }
+    return o;
+  } catch(e2) { return e; }
+}
+
+// ── SCREENS ──
+function show(id) {
+  var ids = ['S_lock','S_setup','S_chat'];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
+    if (ids[i] === id) el.classList.remove('off');
+    else el.classList.add('off');
+  }
+}
+
+// ── PIN / LOCK ──
+function pk(d) {
+  if (pinBuf.length >= 4) return;
+  pinBuf += d;
+  updateDots();
+  if (pinBuf.length === 4) setTimeout(checkPin, 150);
+}
+function pb() { pinBuf = pinBuf.slice(0,-1); updateDots(); }
+function updateDots() {
+  for (var i = 0; i < 4; i++) {
+    var d = document.getElementById('d'+i);
+    d.className = 'dot' + (i < pinBuf.length ? ' on' : '');
+  }
+}
+function checkPin() {
+  if (pinBuf === G.pin) {
+    pinBuf = ''; updateDots(); openChat();
+  } else {
+    for (var i = 0; i < 4; i++) document.getElementById('d'+i).className = 'dot err';
+    toast('Wrong PIN');
+    setTimeout(function(){ pinBuf = ''; updateDots(); }, 700);
+  }
+}
+function faceId() { toast('Use Face ID via Settings → Safari after installing to home screen'); }
+
+// ── SETUP ──
+function s1() {
+  var n = document.getElementById('iName').value.trim();
+  var p = document.getElementById('iPin').value;
+  var p2 = document.getElementById('iPin2').value;
+  if (!n) return toast('Enter your name');
+  if (!/^\d{4}$/.test(p)) return toast('PIN must be 4 digits');
+  if (p !== p2) return toast('PINs do not match');
+  G.name = n; G.pin = p;
+  document.getElementById('st1').classList.add('off');
+  document.getElementById('st2').classList.remove('off');
+}
+function createRoom() {
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var code = '';
+  for (var i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  G.room = code;
+  document.getElementById('codeBox').textContent = code;
+  document.getElementById('st2').classList.add('off');
+  document.getElementById('st3').classList.remove('off');
+}
+function joinRoom() {
+  var c = document.getElementById('iJoin').value.trim().toUpperCase();
+  if (c.length < 4) return toast('Enter a valid room code');
+  G.room = c;
+  save(); finishSetup();
+}
+function copyCode() {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(G.room).then(function(){ toast('Code copied!'); });
+  } else {
+    toast('Room code: ' + G.room);
+  }
+}
+function finishSetup() { save(); openChat(); }
+
+// ── CHAT ──
+function openChat() {
+  show('S_chat');
+  document.getElementById('rBadge').textContent = G.room;
+  document.getElementById('pAv').childNodes[0].nodeValue = peer.name[0];
+  syncToggles();
+  renderMsgs();
+  updatePeer();
+  updateTBar();
+  setTimeout(peerArrives, 2000);
+}
+
+function tStr(ts) {
+  var d = new Date(ts);
+  var h = d.getHours(); var m = d.getMinutes();
+  return (h < 10 ? '0'+h : h) + ':' + (m < 10 ? '0'+m : m);
+}
+function tDisp(s) {
+  if (s <= 0) return '0s';
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.ceil(s/60) + 'm';
+  return Math.ceil(s/3600) + 'h';
+}
+
+function renderMsgs() {
+  var area = document.getElementById('msgs');
+  area.innerHTML = '<div class="dv">TODAY</div>';
+  for (var i = 0; i < G.msgs.length; i++) {
+    var m = G.msgs[i];
+    if (m.del) continue;
+    var isMe = m.from === 'me';
+    var grp = document.createElement('div');
+    grp.className = 'grp ' + (isMe ? 'me' : 'them');
+    grp.id = 'mg_' + m.id;
+
+    var row = document.createElement('div');
+    row.className = 'brow';
+    var bub = document.createElement('div');
+    bub.className = 'bub';
+    bub.textContent = dec(m.txt, G.room || 'k');
+    row.appendChild(bub); grp.appendChild(row);
+
+    var meta = document.createElement('div');
+    meta.className = 'meta';
+    var ts = document.createElement('span');
+    ts.textContent = tStr(m.ts);
+    meta.appendChild(ts);
+
+    if (isMe && G.rr) {
+      var tk = document.createElement('span');
+      tk.className = 'ticks ' + m.st;
+      tk.textContent = m.st === 'sent' ? '✓' : '✓✓';
+      meta.appendChild(tk);
+    }
+
+    if (G.timerSecs > 0 && m.readAt) {
+      var rem = Math.max(0, Math.round(G.timerSecs - (Date.now() - m.readAt) / 1000));
+      var tag = document.createElement('span');
+      tag.className = 'ttag' + (rem < 30 ? ' urg' : '');
+      tag.id = 'tt_' + m.id;
+      tag.textContent = '⏱ ' + tDisp(rem);
+      meta.appendChild(tag);
+    }
+
+    grp.appendChild(meta);
+    area.appendChild(grp);
+  }
+  area.scrollTop = area.scrollHeight;
+}
+
+function send() {
+  var inp = document.getElementById('minp');
+  var txt = inp.value.trim();
+  if (!txt) return;
+  var m = { id: Date.now()+'', txt: enc(txt, G.room||'k'), from:'me', ts:Date.now(), st:'sent', readAt:null, del:false };
+  G.msgs.push(m);
+  inp.value = ''; inp.style.height = 'auto';
+  document.getElementById('sbtn').disabled = true;
+  save(); renderMsgs();
+
+  var idx = G.msgs.length - 1;
+  setTimeout(function(){ G.msgs[idx].st = 'delivered'; save(); renderMsgs(); }, 600 + Math.random()*400);
+
+  if (peer.online) {
+    var delay = 2000 + Math.random()*3000;
+    setTimeout(function(){
+      G.msgs[idx].st = 'read';
+      G.msgs[idx].readAt = Date.now();
+      save(); renderMsgs();
+      startDel(G.msgs[idx]);
+      if (Math.random() > 0.45) simReply();
+    }, delay);
+  }
+}
+
+function startDel(m) {
+  if (!G.timerSecs) return;
+  setTimeout(function(){
+    m.del = true; save();
+    var el = document.getElementById('mg_' + m.id);
+    if (el) { el.querySelector('.bub').classList.add('fade'); setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 300); }
+  }, G.timerSecs * 1000);
+}
+
+setInterval(function(){
+  for (var i = 0; i < G.msgs.length; i++) {
+    var m = G.msgs[i];
+    if (m.del || !m.readAt || !G.timerSecs) continue;
+    var rem = Math.max(0, Math.round(G.timerSecs - (Date.now() - m.readAt)/1000));
+    var el = document.getElementById('tt_' + m.id);
+    if (el) { el.textContent = '⏱ ' + tDisp(rem); el.className = 'ttag' + (rem < 30 ? ' urg' : ''); }
+  }
+}, 1000);
+
+function onInp(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  document.getElementById('sbtn').disabled = !el.value.trim();
+}
+function onKD(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }
+
+// ── PEER ──
+function updatePeer() {
+  document.getElementById('pName').textContent = peer.name;
+  document.getElementById('pAv').childNodes[0].nodeValue = peer.name[0];
+  var dot = document.getElementById('pDot');
+  var stat = document.getElementById('pStat');
+  if (peer.online && G.online) {
+    dot.className = 'av-dot on'; stat.textContent = 'Online'; stat.className = 'hdr-status on';
+  } else if (peer.lastSeen && G.ls) {
+    dot.className = 'av-dot'; stat.textContent = 'Last seen ' + tStr(peer.lastSeen); stat.className = 'hdr-status';
+  } else {
+    dot.className = 'av-dot'; stat.textContent = 'Offline'; stat.className = 'hdr-status';
+  }
+}
+
+function peerArrives() {
+  peer.online = true; peer.lastSeen = Date.now(); updatePeer();
+  setTimeout(function(){
+    showTyping();
+    setTimeout(function(){
+      hideTyping();
+      addPeerMsg("Hey! This is Cipher — your private encrypted chat 🔐");
+    }, 2200);
+  }, 1200);
+  setTimeout(function(){ peer.online = false; peer.lastSeen = Date.now(); updatePeer(); }, 35000);
+}
+
+function simReply() {
+  setTimeout(function(){
+    showTyping();
+    var r = ["Got it 👍","Sure!","On my way","👌","Sounds good!","Let me check"];
+    setTimeout(function(){
+      hideTyping();
+      addPeerMsg(r[Math.floor(Math.random()*r.length)]);
+    }, 1200 + Math.random()*1500);
+  }, 800);
+}
+
+function addPeerMsg(txt) {
+  var m = { id: Date.now()+'', txt: enc(txt, G.room||'k'), from:'them', ts:Date.now(), st:'read', readAt:Date.now(), del:false };
+  G.msgs.push(m); save(); renderMsgs(); startDel(m);
+}
+
+function showTyping() {
+  document.getElementById('tName').textContent = peer.name + ' is typing…';
+  document.getElementById('typing').classList.remove('off');
+  document.getElementById('msgs').scrollTop = 99999;
+}
+function hideTyping() { document.getElementById('typing').classList.add('off'); }
+
+// ── SETTINGS ──
+function openPanel() { document.getElementById('ov').classList.add('on'); document.getElementById('panel').classList.add('on'); }
+function closePanel() { document.getElementById('ov').classList.remove('on'); document.getElementById('panel').classList.remove('on'); }
+
+function syncToggles() {
+  document.getElementById('togRR').className = 'tog' + (G.rr ? ' on' : '');
+  document.getElementById('togLS').className = 'tog' + (G.ls ? ' on' : '');
+  document.getElementById('togON').className = 'tog' + (G.online ? ' on' : '');
+  document.querySelectorAll('.topt').forEach(function(b){ b.className = 'topt' + (parseInt(b.getAttribute('data-v')) === G.timerSecs ? ' on' : ''); });
+}
+function togRR() { G.rr = !G.rr; save(); syncToggles(); }
+function togLS() { G.ls = !G.ls; save(); syncToggles(); updatePeer(); }
+function togON() { G.online = !G.online; save(); syncToggles(); updatePeer(); }
+function setT(s) { G.timerSecs = s; save(); syncToggles(); updateTBar(); toast(s ? 'Deletes ' + tDisp(s) + ' after read' : 'Auto-delete off'); }
+function updateTBar() {
+  var bar = document.getElementById('tBar');
+  if (!G.timerSecs) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  document.getElementById('tLabel').textContent = tDisp(G.timerSecs);
+}
+
+// ── CONFIRM ──
+function confirmClear() {
+  document.getElementById('cIcon').textContent = '🗑';
+  document.getElementById('cTitle').textContent = 'Clear all messages?';
+  document.getElementById('cDesc').textContent = 'Permanently deletes all messages. Cannot be undone.';
+  document.getElementById('cOk').textContent = 'Clear';
+  G.cfmAction = 'clear';
+  document.getElementById('cfm').classList.add('on');
+  closePanel();
+}
+function confirmLeave() {
+  document.getElementById('cIcon').textContent = '🚪';
+  document.getElementById('cTitle').textContent = 'Leave room?';
+  document.getElementById('cDesc').textContent = 'All messages will be lost and you will need a new code to rejoin.';
+  document.getElementById('cOk').textContent = 'Leave';
+  G.cfmAction = 'leave';
+  document.getElementById('cfm').classList.add('on');
+  closePanel();
+}
+function closeCfm() { document.getElementById('cfm').classList.remove('on'); G.cfmAction = null; }
+function doCfm() {
+  if (G.cfmAction === 'clear') { G.msgs = []; save(); renderMsgs(); toast('Messages cleared'); }
+  else if (G.cfmAction === 'leave') { try { localStorage.removeItem('cph'); } catch(e){} location.reload(); }
+  closeCfm();
+}
+
+// ── TOAST ──
+var tTimer;
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('on');
+  clearTimeout(tTimer);
+  tTimer = setTimeout(function(){ el.classList.remove('on'); }, 2500);
+}
+
+// ── INIT ──
+(function(){
+  var ok = load();
+  if (!ok || !G.pin) { show('S_setup'); }
+  else { show('S_lock'); document.getElementById('lockSub').textContent = 'Enter PIN to unlock'; }
+})();
+</script>
+</body>
+</html>
