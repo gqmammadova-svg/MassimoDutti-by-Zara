@@ -425,10 +425,18 @@ function saveId(){
 
 // ===== LIST =====
 function openList(){
-  show('S_list');
+  show('S_list');updateAppBadge();
   document.getElementById('myNameLabel').textContent=G.name;
   renderList();
   attachListWatchers();
+}
+function totalUnread(){var t=0;G.rooms.forEach(function(r){t+=(r._unread||0);});return t;}
+function updateAppBadge(){
+  var t=totalUnread();
+  // best-effort home-screen icon badge (works mainly while app is foreground/recent on iOS)
+  try{ if('setAppBadge' in navigator){ if(t>0)navigator.setAppBadge(t); else navigator.clearAppBadge(); } }catch(e){}
+  // also reflect in document title
+  try{ document.title=(t>0?('('+t+') '):'')+'Massimo Dutti'; }catch(e){}
 }
 function renderList(){
   var c=document.getElementById('chats');
@@ -496,11 +504,23 @@ function attachListWatchers(){
       if(peer){r.peerName=peer.name||r.peerName;r._online=!!peer.online;}
       save();renderList();
     });
-    var msg=db.ref(base+'/messages').limitToLast(1);
+    var msg=db.ref(base+'/messages').limitToLast(20);
     msg.on('value',function(snap){
       var v=snap.val()||{};var keys=Object.keys(v);
-      if(keys.length){var m=v[keys[0]];r._last=(m.from===G.myId?'You: ':'')+dec(m.txt,r.code);r._time=tStr(m.ts);}
-      renderList();
+      if(keys.length){
+        // preview = newest message
+        var last=v[keys[keys.length-1]];
+        r._last=(last.from===G.myId?'You: ':'')+dec(last.txt,r.code);
+        r._time=tStr(last.ts);
+        // unread = peer messages newer than lastOpened, unless this chat is currently open
+        if(cur&&cur.code===r.code){ r._unread=0; }
+        else {
+          var seen=r.lastOpened||0;var n=0;
+          for(var i=0;i<keys.length;i++){var mm=v[keys[i]];if(mm.from!==G.myId && (mm.ts||0)>seen)n++;}
+          r._unread=n;
+        }
+      } else { r._last='';r._time='';r._unread=0; }
+      save();renderList();updateAppBadge();
     });
     listRefs[r.code]={pres:pres,msg:msg};
   });
@@ -510,7 +530,7 @@ function attachListWatchers(){
 function newRoom(){
   var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',code='';
   for(var i=0;i<6;i++)code+=c[Math.floor(Math.random()*c.length)];
-  var r={code:code,peerName:'',label:'',timerSecs:10,rr:true,ls:true,online:true,_fresh:true};
+  var r={code:code,peerName:'',label:'',timerSecs:10,rr:true,ls:true,online:true,lastOpened:0,_fresh:true};
   G.rooms.push(r);save();
   cur=r;
   document.getElementById('shareCode').textContent=code;
@@ -542,13 +562,13 @@ function doJoin(){
   // avoid duplicates
   var existing=G.rooms.filter(function(r){return r.code===code;})[0];
   if(existing){closeJoin();openChat(existing);return;}
-  var r={code:code,peerName:'',label:'',timerSecs:10,rr:true,ls:true,online:true};
+  var r={code:code,peerName:'',label:'',timerSecs:10,rr:true,ls:true,online:true,lastOpened:0};
   G.rooms.push(r);save();closeJoin();openChat(r);
 }
 
 // ===== CHAT =====
 function openChat(r){
-  cur=r;r._unread=0;
+  cur=r;r._unread=0;r.lastOpened=Date.now();save();updateAppBadge();
   show('S_chat');
   document.getElementById('tBar').style.display=r.timerSecs?'flex':'none';
   document.getElementById('tLabel').textContent=tDisp(r.timerSecs);
@@ -588,6 +608,7 @@ function connectRoom(r){
   roomRef.on('child_added',function(snap){
     var m=snap.val();m.key=snap.key;msgCache[snap.key]=m;renderMsgs();
     if(m.readAt&&r.timerSecs>0)scheduleDelete(r,snap.key,m.readAt);
+    if(cur&&cur.code===r.code){ r.lastOpened=Date.now(); r._unread=0; save(); updateAppBadge(); }
     if(m.from!==G.myId && !m.readAt){
       roomRef.child(snap.key).update({readAt:firebase.database.ServerValue.TIMESTAMP});
       notify(peerName, dec(m.txt,r.code));
